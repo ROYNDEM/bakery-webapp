@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cartItemsContainer.innerHTML += `
                     <div class="cart-item">
                         <p>${product.name} (x${cartItem.quantity})</p>
+                        <button class="remove-btn" data-product-id="${product.id}">Remove</button>
                         <p>Ksh ${itemTotal.toFixed(2)}</p>
                     </div>
                 `;
@@ -42,13 +43,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         cartTotalContainer.innerHTML = `<h3>Total: Ksh ${cartTotal.toFixed(2)}</h3>`;
     };
 
+    // Use event delegation to handle clicks on "Remove" buttons
+    cartItemsContainer.addEventListener('click', (event) => {
+        if (event.target.classList.contains('remove-btn')) {
+            const productId = event.target.getAttribute('data-product-id');
+            removeFromCart(productId);
+        }
+    });
+
+    const removeFromCart = (productId) => {
+        let cart = JSON.parse(localStorage.getItem('cart')) || [];
+        
+        // Filter out the item to be removed
+        const updatedCart = cart.filter(item => item.id !== productId);
+
+        if (cart.length === updatedCart.length) {
+            // If nothing was removed, it might be a product with quantity > 1.
+            // For simplicity, this implementation removes the entire product line.
+            // A more complex implementation could decrease the quantity.
+            alert("Product not found in cart.");
+            return;
+        }
+
+        // Save the updated cart back to localStorage
+        localStorage.setItem('cart', JSON.stringify(updatedCart));
+
+        // Re-render the cart to show the changes
+        displayCart();
+    };
+
     checkoutBtn.addEventListener('click', async () => {
-        const phone = prompt("Please enter your phone number in the format 2547xxxxxxxx:", "254708374149");
+        // Get the last used phone number from localStorage, or use a default placeholder.
+        const savedPhone = localStorage.getItem('bakeryUserPhone') || '254';
+        const phone = prompt("Please enter your phone number in the format 254xxxxxxxx:", savedPhone);
 
         if (!phone || !/^254(7|1)\d{8}$/.test(phone)) {
             alert("Invalid phone number format. Please use 2547xxxxxxxx.");
             return;
         }
+
+        // Save the valid phone number for next time.
+        localStorage.setItem('bakeryUserPhone', phone);
 
         // The amount should be an integer for the Daraja API
         const amount = Math.round(cartTotal);

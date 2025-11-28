@@ -100,7 +100,7 @@ app.post('/api/stkpush', getDarajaToken, async (req, res) => {
         PartyA: phone, // Customer's phone number (e.g., 2547xxxxxxxx)
         PartyB: shortcode,
         PhoneNumber: phone,
-        CallBackURL: 'https://mydomain.com/api/callback', // IMPORTANT: Must be a PUBLICLY accessible URL
+        CallBackURL: 'https://horrendous-humorously-phillip.ngrok-free.dev/api/callback', // This is your public URL from ngrok
         AccountReference: 'BakeryOrder',
         TransactionDesc: 'Payment for bakery goods'
     };
