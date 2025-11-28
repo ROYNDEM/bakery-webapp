@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     productList.addEventListener('click', (event) => {
         // Check if the clicked element is a button
         if (event.target.tagName === 'BUTTON') {
-            const productId = parseInt(event.target.getAttribute('data-product-id'));
+            const productId = event.target.getAttribute('data-product-id');
             addToCart(productId);
         }
     });

@@ -3,6 +3,7 @@ require('dotenv').config(); // Loads environment variables from .env file
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const axios = require('axios');
 
 // 2. Initialize the Express application
 const app = express();
@@ -10,6 +11,10 @@ const PORT = process.env.PORT || 3000;
 
 // 3. Setup Middleware
 // This allows your frontend (running on a different address) to make requests to this backend.
+app.use(cors());
+
+// This allows the server to understand and process JSON data sent in requests.
+app.use(express.json());
 // This is how your index.html, styles.css, and app.js will be accessible to the browser.
 app.use(express.static('public'));
 
@@ -53,5 +58,70 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// We will add the Daraja API routes here in the next step.
+// --- 7. DARAJA API INTEGRATION ---
 
+// Middleware to get Daraja access token
+const getDarajaToken = async (req, res, next) => {
+    const consumerKey = process.env.DARAJA_CONSUMER_KEY;
+    const consumerSecret = process.env.DARAJA_CONSUMER_SECRET;
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+    try {
+        const response = await axios.get('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
+            headers: {
+                'Authorization': `Basic ${auth}`
+            }
+        });
+        req.darajaToken = response.data.access_token;
+        next();
+    } catch (error) {
+        console.error('Failed to get Daraja token:', error.response ? error.response.data : error.message);
+        res.status(500).json({ message: 'Failed to get payment token' });
+    }
+};
+
+// Endpoint to initiate STK Push
+app.post('/api/stkpush', getDarajaToken, async (req, res) => {
+    const { amount, phone } = req.body;
+    const token = req.darajaToken;
+
+    const shortcode = process.env.DARAJA_SHORTCODE;
+    const passkey = process.env.DARAJA_PASSKEY;
+
+    const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
+    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
+
+    const payload = {
+        BusinessShortCode: shortcode,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: 'CustomerPayBillOnline', // or 'CustomerBuyGoodsOnline' for Till Numbers
+        Amount: amount,
+        PartyA: phone, // Customer's phone number (e.g., 2547xxxxxxxx)
+        PartyB: shortcode,
+        PhoneNumber: phone,
+        CallBackURL: 'https://mydomain.com/api/callback', // IMPORTANT: Must be a PUBLICLY accessible URL
+        AccountReference: 'BakeryOrder',
+        TransactionDesc: 'Payment for bakery goods'
+    };
+
+    try {
+        const response = await axios.post('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', payload, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('STK Push Error:', error.response ? error.response.data.errorMessage : error.message);
+        res.status(500).json({ message: 'STK Push failed', error: error.response ? error.response.data : null });
+    }
+});
+
+// Endpoint for Daraja to send the callback to
+app.post('/api/callback', (req, res) => {
+    console.log('--- STK Callback Received ---');
+    console.log(JSON.stringify(req.body, null, 2));
+    // Here you would process the callback, check if payment was successful, and update the order status in your database.
+    res.json({ message: 'Callback received successfully' });
+});
