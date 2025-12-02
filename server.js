@@ -39,6 +39,17 @@ const productSchema = new mongoose.Schema({
 
 const Product = mongoose.model('Product', productSchema);
 
+// Define a schema for storing successful orders
+const orderSchema = new mongoose.Schema({
+    mpesaReceiptNumber: String,
+    checkoutRequestID: { type: String, unique: true },
+    phoneNumber: String,
+    amount: Number,
+    status: { type: String, default: 'Completed' },
+    createdAt: { type: Date, default: Date.now }
+});
+const Order = mongoose.model('Order', orderSchema);
+
 // 6. Define API routes
 
 // API endpoint for the frontend to get all products
@@ -119,9 +130,61 @@ app.post('/api/stkpush', getDarajaToken, async (req, res) => {
 });
 
 // Endpoint for Daraja to send the callback to
-app.post('/api/callback', (req, res) => {
+app.post('/api/callback', async (req, res) => {
     console.log('--- STK Callback Received ---');
     console.log(JSON.stringify(req.body, null, 2));
-    // Here you would process the callback, check if payment was successful, and update the order status in your database.
-    res.json({ message: 'Callback received successfully' });
+
+    const callbackData = req.body.Body.stkCallback;
+    const resultCode = callbackData.ResultCode;
+
+    if (resultCode === 0) {
+        // Payment was successful
+        console.log('Payment successful!');
+        const metadata = callbackData.CallbackMetadata.Item;
+        const amount = metadata.find(item => item.Name === 'Amount').Value;
+        const mpesaReceiptNumber = metadata.find(item => item.Name === 'MpesaReceiptNumber').Value;
+        const phoneNumber = metadata.find(item => item.Name === 'PhoneNumber').Value;
+
+        // Create and save the order
+        const newOrder = new Order({
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            checkoutRequestID: callbackData.CheckoutRequestID,
+            phoneNumber: phoneNumber,
+            amount: amount
+        });
+
+        try {
+            await newOrder.save();
+            console.log('Order saved successfully to the database.');
+        } catch (error) {
+            console.error('Error saving order to database:', error);
+        }
+
+    } else {
+        // Payment failed or was cancelled
+        console.log('Payment failed. Reason:', callbackData.ResultDesc);
+    }
+
+    // Respond to Safaricom to acknowledge receipt
+    res.json({ ResultCode: 0, ResultDesc: "Accepted" });
+});
+
+// Endpoint for the frontend to poll for payment status
+app.get('/api/order/status/:checkoutId', async (req, res) => {
+    const { checkoutId } = req.params;
+
+    try {
+        const order = await Order.findOne({ checkoutRequestID: checkoutId });
+
+        if (order) {
+            // Order found, payment is complete
+            res.json({ status: 'completed' });
+        } else {
+            // Order not found yet, payment is pending or failed
+            res.json({ status: 'pending' });
+        }
+    } catch (error) {
+        console.error('Error checking order status:', error);
+        res.status(500).json({ message: 'Error checking order status' });
+    }
 });

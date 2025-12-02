@@ -22,10 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
             products.forEach(product => {
                 const productDiv = document.createElement('div');
                 productDiv.className = 'product-item';
-                // Note: The image won't show up yet, that's our next step!
+                // The 'onerror' attribute will replace a broken image link with a placeholder
                 productDiv.innerHTML = `
-                    <h3>${product.name}</h3>
-                    <p>Ksh ${product.price}</p>
+                    <img src="${product.image}" alt="${product.name}" onerror="this.onerror=null;this.src='images/placeholder.png';">
+                    <div style="flex-grow: 1;">
+                        <h3>${product.name}</h3>
+                        <p>Ksh ${product.price.toFixed(2)}</p>
+                    </div>
                     <button data-product-id="${product.id}">Add to Cart</button>
                 `;
                 productList.appendChild(productDiv);

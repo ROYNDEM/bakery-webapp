@@ -93,9 +93,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        alert(`Requesting payment of Ksh ${amount} from ${phone}. Please check your phone to enter your M-Pesa PIN.`);
+        // Show an initial processing message
+        checkoutBtn.textContent = 'Processing... Please wait.';
+        checkoutBtn.disabled = true;
 
         try {
+            // 1. Initiate STK Push
             const res = await fetch('http://localhost:3000/api/stkpush', {
                 method: 'POST',
                 headers: {
@@ -103,13 +106,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 body: JSON.stringify({ amount, phone })
             });
-
             const data = await res.json();
-            console.log('STK Push Response:', data);
-            alert(data.CustomerMessage || 'An error occurred.');
+
+            if (!res.ok) {
+                throw new Error(data.message || 'STK Push initiation failed.');
+            }
+
+            alert(data.CustomerMessage || 'Request sent to your phone. Please enter your M-Pesa PIN.');
+
+            // 2. Start polling for payment status
+            const checkoutRequestID = data.CheckoutRequestID;
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`http://localhost:3000/api/order/status/${checkoutRequestID}`);
+                    const statusData = await statusRes.json();
+
+                    if (statusData.status === 'completed') {
+                        clearInterval(pollInterval); // Stop polling
+                        alert('Payment successful! Thank you for your order.');
+                        
+                        // Clear the cart and redirect to homepage
+                        localStorage.removeItem('cart');
+                        window.location.href = '/'; 
+                    }
+                    // If status is 'pending', we do nothing and let the interval run again.
+
+                } catch (pollError) {
+                    console.error('Polling error:', pollError);
+                    // We don't stop polling on error, maybe it's a temporary network issue
+                }
+            }, 3000); // Check every 3 seconds
+
         } catch (error) {
             console.error('Checkout Error:', error);
             alert('Failed to initiate payment. Please check the console for details.');
+            // Re-enable the button if the initial request fails
+            checkoutBtn.textContent = 'Checkout';
+            checkoutBtn.disabled = false;
         }
     });
 
