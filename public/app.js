@@ -1,70 +1,111 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const productList = document.getElementById('product-list');
+    const categoriesContainer = document.getElementById('categories-container');
+    const searchBar = document.getElementById('search-bar');
     const cartCount = document.getElementById('cart-count');
+    let allProducts = []; // To store the master list of products
 
-    // Function to update the cart item count in the header
     const updateCartCount = () => {
-        // Get the cart from localStorage, or an empty array if it doesn't exist
         const cart = JSON.parse(localStorage.getItem('cart')) || [];
-        // Calculate the total quantity of all items in the cart
         cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
     };
 
-    // Fetch products from our backend API
-    fetch('http://localhost:3000/api/products')
-        .then(response => response.json())
-        .then(products => {
-            if (products.length === 0) {
-                productList.innerHTML = '<p>No products to display.</p>';
-                return;
-            }
+    const renderProducts = (productsToRender) => {
+        categoriesContainer.innerHTML = ''; // Clear previous content
 
-            products.forEach(product => {
+        // 1. Define categories based on keywords in product names
+        const categories = {
+            'Cakes': ['Cake', 'Cheesecake'],
+            'Cupcakes': ['Cupcakes'],
+            'Cookies': ['Cookies'],
+            'Pastries': ['Pie', 'Roll']
+        };
+
+        const categorizedProducts = {};
+
+        // 2. Group products into categories
+        productsToRender.forEach(product => {
+            let foundCategory = 'Others';
+            for (const categoryName in categories) {
+                if (categories[categoryName].some(keyword => product.name.includes(keyword))) {
+                    foundCategory = categoryName;
+                    break;
+                }
+            }
+            if (!categorizedProducts[foundCategory]) {
+                categorizedProducts[foundCategory] = [];
+            }
+            categorizedProducts[foundCategory].push(product);
+        });
+
+        // 3. Render each category and its products
+        for (const categoryName in categorizedProducts) {
+            const section = document.createElement('section');
+            section.className = 'category-section';
+
+            const title = document.createElement('h2');
+            title.className = 'category-title';
+            title.textContent = categoryName;
+            section.appendChild(title);
+
+            const productListDiv = document.createElement('div');
+            productListDiv.className = 'product-list';
+
+            categorizedProducts[categoryName].forEach(product => {
                 const productDiv = document.createElement('div');
                 productDiv.className = 'product-item';
-                // The 'onerror' attribute will replace a broken image link with a placeholder
                 productDiv.innerHTML = `
-                    <img src="${product.image}" alt="${product.name}" onerror="this.onerror=null;this.src='images/placeholder.png';">
+                    <img src="/${product.image}" alt="${product.name}" onerror="this.onerror=null;this.src='images/placeholder.png';">
                     <div style="flex-grow: 1;">
                         <h3>${product.name}</h3>
                         <p>Ksh ${product.price.toFixed(2)}</p>
                     </div>
                     <button data-product-id="${product.id}">Add to Cart</button>
                 `;
-                productList.appendChild(productDiv);
+                productListDiv.appendChild(productDiv);
             });
-        });
 
-    // Add a single event listener to the product list to handle all button clicks
-    productList.addEventListener('click', (event) => {
-        // Check if the clicked element is a button
-        if (event.target.tagName === 'BUTTON') {
-            const productId = event.target.getAttribute('data-product-id');
-            addToCart(productId);
+            section.appendChild(productListDiv);
+            categoriesContainer.appendChild(section);
         }
-    });
+
+        if (productsToRender.length === 0) {
+            categoriesContainer.innerHTML = '<p>No products match your search.</p>';
+        }
+    };
 
     const addToCart = (productId) => {
-        // Get the current cart from localStorage or initialize an empty array
         let cart = JSON.parse(localStorage.getItem('cart')) || [];
-        
-        // Find if the product is already in the cart
         const existingProduct = cart.find(item => item.id === productId);
 
-        if (existingProduct) {
-            // If it exists, just increase the quantity
-            existingProduct.quantity++;
-        } else {
-            // If it's a new product, add it to the cart with quantity 1
-            cart.push({ id: productId, quantity: 1 });
-        }
+        existingProduct ? existingProduct.quantity++ : cart.push({ id: productId, quantity: 1 });
 
-        // Save the updated cart back to localStorage
         localStorage.setItem('cart', JSON.stringify(cart));
-        updateCartCount(); // Update the count in the header
+        updateCartCount();
         alert('Item added to cart!');
     };
 
-    // Update the cart count when the page first loads
-    updateCartCount();
+    // Event Listeners
+    categoriesContainer.addEventListener('click', (event) => {
+        if (event.target.tagName === 'BUTTON') {
+            addToCart(event.target.dataset.productId);
+        }
+    });
+
+    searchBar.addEventListener('input', (event) => {
+        const searchTerm = event.target.value.toLowerCase();
+        const filteredProducts = allProducts.filter(product =>
+            product.name.toLowerCase().includes(searchTerm)
+        );
+        renderProducts(filteredProducts);
+    });
+
+    // Initial Load
+    const init = async () => {
+        const response = await fetch('/api/products');
+        allProducts = await response.json();
+        renderProducts(allProducts);
+        updateCartCount();
+    };
+
+    init();
 });

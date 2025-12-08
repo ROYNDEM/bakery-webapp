@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         
                         // Clear the cart and redirect to homepage
                         localStorage.removeItem('cart');
-                        window.location.href = '/'; 
+                        window.location.href = '/'; // This now correctly points to the new landing page
                     }
                     // If status is 'pending', we do nothing and let the interval run again.
 
